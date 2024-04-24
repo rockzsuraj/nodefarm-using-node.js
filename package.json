@@ -1,0 +1,27 @@
+{
+  "name": "code",
+  "version": "1.0.0",
+  "description": "added for eslint pre commit hook",
+  "main": "index.js",
+  "scripts": {
+    "lint-staged": "lint-staged",
+    "lint": "eslint --config .eslintrc.json . --max-warnings=-1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "eslint": "^9.1.1",
+    "husky": "^4.2.5",
+    "lint-staged": "^15.2.2"
+  },
+  "lint-staged": {
+    "*.{js,jsx}": [
+      "npm run lint"
+    ]
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "npm run lint-staged"
+    }
+  }
+}
