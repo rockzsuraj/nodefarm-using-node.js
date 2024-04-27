@@ -77,7 +77,7 @@ schema.pre('save', function (next) {
 // QUERY MIDDLEWARE
 // tourSchema.pre('find', function(next) {
 schema.pre(/^find/, async function (next) {
-  this.totalCounts = await this.model.countDocuments(this._conditions);
+  // this.totalCounts = await this.model.countDocuments(this._conditions);
   this.find({ secretTour: { $ne: true } });
   this.start = Date.now();
   next();
