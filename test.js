@@ -17,7 +17,7 @@
 //     lastName : 'Doe',
 //     printName :  function () {
 //        console.log(this.firstName + ' ' + this.lastName);
-//     }   
+//     }
 // }
 
 // obj.printName();
@@ -28,7 +28,6 @@
 
 // console.log('entries: ' + entries);
 
-
 // const sum = () => {
 
 // }
@@ -37,8 +36,6 @@
 // console.log('callbacks function is called');
 // sum();
 // }
-
-
 
 // const mapArr = arr.map(function(e){
 //     return e*e;
@@ -54,8 +51,6 @@
 // const chai = () => {
 //     console.log(this.username);
 // }
-
-
 
 // function chai2() {
 //     console.log(this.username);
@@ -126,3 +121,30 @@
 // let chaiLet = 'chaiLet';
 
 // var chaiVar = 'chaiVar';
+
+const queryObj = {
+  price: { gte: "300" },
+  ratingsAverage: { lt: "4.9" },
+  sort: "-price",
+  limit: 5,
+  duration: { gt: 5 },
+  fields: "summary, name",
+};
+
+const excludeQueries = ["sort", "limit", "page", "fields"];
+const replaceKey = ["gte", "gt", "lte", "lt"];
+Object.keys(queryObj).forEach((key) => {
+  const obj = queryObj[key];
+  if (excludeQueries.includes(key)) {
+    delete queryObj[key];
+  }
+  Object.keys(obj).forEach((objKey) => {
+    if (replaceKey.includes(objKey)) {
+      const operator = `$${objKey}`;
+      obj[operator] = parseFloat(obj[objKey]);
+      delete obj[objKey];
+    }
+  });
+});
+
+console.log(queryObj);

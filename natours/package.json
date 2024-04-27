@@ -7,16 +7,20 @@
   "description": "learning node.js, express and mongoDB",
   "main": "app.js",
   "scripts": {
-    "start:dev": "nodemon --env-file=config.env server.js",
+    "start": "nodemon --env-file=config.env server.js",
     "start:prod": "NODE_ENV=production nodemon server.js",
     "lint-staged": "lint-staged",
-    "lint": "eslint --config .eslintrc.json . --max-warnings=-1"
+    "lint": "eslint --config .eslintrc.json . --max-warnings=-1",
+    "deleteDevData": "node --env-file=config.env dev-data/data/import-dev-data.js __delete",
+    "importDevData": "node --env-file=config.env dev-data/data/import-dev-data.js __import"
   },
   "author": "suraj",
   "license": "ISC",
   "dependencies": {
     "express": "^4.19.2",
-    "morgan": "^1.10.0"
+    "mongoose": "^8.3.2",
+    "morgan": "^1.10.0",
+    "slugify": "^1.6.6"
   },
   "devDependencies": {
     "eslint": "^8.57.0",
