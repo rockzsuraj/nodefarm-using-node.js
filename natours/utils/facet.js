@@ -75,7 +75,7 @@ class Facet {
 
       return { limit, skip };
     }
-    return { limit: 0, skip: 0 };
+    return { limit: 10, skip: 0 };
   }
 
   filters() {

@@ -17,11 +17,11 @@ const pipeline = [
   {
     $match: queryObj,
   },
-  {
-    $facet: {
-      totalCount: [{ totalCount: { $count: 'count' } }, { totalResults: {} }],
-    },
-  },
+  // {
+  //   $facet: {
+  //     totalCount: [{ totalCount: { $count: 'count' } }, { totalResults: {} }],
+  //   },
+  // },
 ];
 
 db.getCollection('tours').aggregate(pipeline);

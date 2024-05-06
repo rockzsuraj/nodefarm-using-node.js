@@ -122,29 +122,32 @@
 
 // var chaiVar = 'chaiVar';
 
-const queryObj = {
-  price: { gte: "300" },
-  ratingsAverage: { lt: "4.9" },
-  sort: "-price",
-  limit: 5,
-  duration: { gt: 5 },
-  fields: "summary, name",
-};
+// const queryObj = {
+//   price: { gte: "300" },
+//   ratingsAverage: { lt: "4.9" },
+//   sort: "-price",
+//   limit: 5,
+//   duration: { gt: 5 },
+//   fields: "summary, name",
+// };
 
-const excludeQueries = ["sort", "limit", "page", "fields"];
-const replaceKey = ["gte", "gt", "lte", "lt"];
-Object.keys(queryObj).forEach((key) => {
-  const obj = queryObj[key];
-  if (excludeQueries.includes(key)) {
-    delete queryObj[key];
-  }
-  Object.keys(obj).forEach((objKey) => {
-    if (replaceKey.includes(objKey)) {
-      const operator = `$${objKey}`;
-      obj[operator] = parseFloat(obj[objKey]);
-      delete obj[objKey];
-    }
-  });
-});
+// const excludeQueries = ["sort", "limit", "page", "fields"];
+// const replaceKey = ["gte", "gt", "lte", "lt"];
+// Object.keys(queryObj).forEach((key) => {
+//   const obj = queryObj[key];
+//   if (excludeQueries.includes(key)) {
+//     delete queryObj[key];
+//   }
+//   Object.keys(obj).forEach((objKey) => {
+//     if (replaceKey.includes(objKey)) {
+//       const operator = `$${objKey}`;
+//       obj[operator] = parseFloat(obj[objKey]);
+//       delete obj[objKey];
+//     }
+//   });
+// });
 
-console.log(queryObj);
+// console.log(queryObj);
+
+const sec = parseInt(new Date("2024-05-04T18:24:45.359Z").getTime() / 1000, 10);
+console.log("sec ==>", sec);

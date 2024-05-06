@@ -1,5 +1,8 @@
 const mongoose = require('mongoose');
 const slugify = require('slugify');
+/**
+ * @type {mongoose.SchemaDefinitionProperty}
+ */
 
 const schema = new mongoose.Schema(
   {
@@ -8,6 +11,8 @@ const schema = new mongoose.Schema(
       type: String,
       required: [true, 'A tour must have a name'],
       trim: true,
+      minLength: [10, 'A tour name must be greater than 10'],
+      maxLength: [40, 'A tour name must be less than 40'],
     },
     slug: String,
     duration: {
@@ -20,10 +25,16 @@ const schema = new mongoose.Schema(
     },
     difficulty: {
       type: String,
+      enum: {
+        values: ['easy', 'medium', 'hard'],
+        message: 'Difficulty is either: easy medium or hard ',
+      },
     },
     ratingsAverage: {
       type: Number,
       default: 4.5,
+      min: [1, 'A tour must have min rating 1.0'],
+      max: [5, 'A tour must have max rating 5.0'],
     },
     ratingsQuantity: {
       type: Number,
@@ -31,6 +42,17 @@ const schema = new mongoose.Schema(
     price: {
       type: Number,
       required: [true, 'A tour must have a price'],
+    },
+    priceDiscount: {
+      type: Number,
+      validate: {
+        // this only points to current doc on NEW document creation
+        validator: function (val) {
+          return this.price > val;
+        },
+        message:
+          'The price discount ({VALUE}) must be than less than original price',
+      },
     },
     summary: {
       type: String,
@@ -70,6 +92,7 @@ schema.virtual('durationWeeks').get(function () {
   return this.duration / 7;
 });
 
+// DOCUMENT middleware only run before .save() and .create()
 schema.pre('save', function (next) {
   this.slug = slugify(this.name, { lower: true, trim: true });
   next();
@@ -92,7 +115,13 @@ schema.post(/^find/, function (docs, next) {
 schema.pre('aggregate', function (next) {
   this.pipeline().unshift({ $match: { secretTour: { $ne: true } } });
 
-  console.log(this.pipeline());
+  next();
+});
+
+schema.post('aggregate', (docs, next) => {
+  if (!docs[0].result.length) {
+    return next();
+  }
   next();
 });
 
