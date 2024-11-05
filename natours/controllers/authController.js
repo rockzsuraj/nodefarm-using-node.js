@@ -1,17 +1,33 @@
 const jwt = require('jsonwebtoken');
-const { promisify } = require('util');
 const crypto = require('crypto');
+const querystring = require('querystring');
+const axios = require('axios');
+const jwksClient = require('jwks-rsa');
+const { promisify } = require('util');
 const AppError = require('../utils/appError');
 const createAsync = require('../utils/createAsync');
 const USER = require('../models/userModel');
 const mail = require('../utils/email');
+
+const jwksUrl = `https://${process.env.OKTA_DOMAIN}/.well-known/jwks.json`;
+
+const client = jwksClient({
+  jwksUri: jwksUrl,
+});
+
+function getKey(header, callback) {
+  client.getSigningKey(header.kid, (err, key) => {
+    const signingKey = key?.getPublicKey();
+    callback(err, signingKey);
+  });
+}
 
 const jwtSign = (id) =>
   jwt.sign({ id }, process.env.JWT_SECRET_KEY, {
     expiresIn: process.env.JWT_EXPIRE_IN,
   });
 
-const getTokenFromHeaders = (req) => req.headers.authorization.split(' ')[1];
+// const getTokenFromHeaders = (req) => req.headers.authorization.split(' ')[1];
 
 const createSendToken = (user, res, statusCode, message) => {
   const token = jwtSign(user._id);
@@ -38,20 +54,94 @@ const createSendToken = (user, res, statusCode, message) => {
 };
 
 exports.login = createAsync(async (req, res, next) => {
-  // 1. check if user has email and password
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return next(new AppError('Please provide email and password', 401));
-  }
-
-  const user = await USER.findOne({ email }).select('+password');
-
-  if (!user || !(await user.correctPassword(password, user.password))) {
-    return next(new AppError('You email or password is incorrect', 401));
-  }
-
-  createSendToken(user, res, 200, 'user successfully login!');
+  const OKTA_AUTHORIZE_URL = `https://${process.env.OKTA_DOMAIN}/authorize`;
+  const params = querystring.stringify({
+    client_id: process.env.OKTA_CLIENT_ID,
+    response_type: 'code',
+    scope: 'openid profile email',
+    redirect_uri: `${process.env.OKTA_REDIRECT_URI}/api/v1/users/callback`,
+    state: 'someRandomState',
+  });
+  res.redirect(`${OKTA_AUTHORIZE_URL}?${params}`);
 });
+
+exports.logout = createAsync(async (req, res, next) => {
+  req.session.destroy((err) => {
+    if (err) {
+      return next(new AppError('Failed to destroy session', 500));
+    }
+    // Clear cookie on client side as well
+    res.clearCookie('natours-web-app', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+    });
+
+    res.redirect(
+      `https://${process.env.OKTA_DOMAIN}/v2/logout?client_id=${process.env.OKTA_CLIENT_ID}&returnTo=${process.env.OKTA_REDIRECT_URI}/`,
+    );
+  });
+});
+
+exports.callback = createAsync(async (req, res, next) => {
+  const { code } = req.query;
+  if (!code) {
+    return res.status(400).send('Authorization code is missing');
+  }
+
+  const response = await axios.post(
+    `https://${process.env.OKTA_DOMAIN}/oauth/token`,
+    querystring.stringify({
+      grant_type: 'authorization_code',
+      client_id: process.env.OKTA_CLIENT_ID,
+      client_secret: process.env.OKTA_CLIENT_SECRET,
+      redirect_uri: process.env.OKTA_REDIRECT_URI,
+      code: code,
+    }),
+    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+  );
+
+  const { access_token: accessToken, id_token: idToken } = response.data;
+  req.session.idToken = idToken;
+  req.session.accessToken = accessToken;
+  res.redirect('/');
+});
+
+exports.usersInfo = createAsync(async (req, res, next) => {
+  // const accessToken = req.session.accessToken;
+
+  // if (!accessToken) {
+  //   return next(new AppError('Access token missing', 401));
+  // }
+  // const userInfoResponse = await axios.get(
+  //   `https://dev-bsfjq33mjqnrbaa2.us.auth0.com/userinfo`,
+  //   {
+  //     headers: {
+  //       Authorization: `Bearer ${accessToken}`,
+  //     },
+  //   },
+  // );
+
+  console.log('req.user:', req.user);
+
+  res.json(req.user);
+});
+
+// exports.login = createAsync(async (req, res, next) => {
+//   // 1. check if user has email and password
+//   const { email, password } = req.body;
+//   if (!email || !password) {
+//     return next(new AppError('Please provide email and password', 401));
+//   }
+
+//   const user = await USER.findOne({ email }).select('+password');
+
+//   if (!user || !(await user.correctPassword(password, user.password))) {
+//     return next(new AppError('You email or password is incorrect', 401));
+//   }
+
+//   createSendToken(user, res, 200, 'user successfully login!');
+// });
 
 exports.signup = createAsync(async (req, res, next) => {
   const newUser = await USER.create({
@@ -72,41 +162,59 @@ exports.signup = createAsync(async (req, res, next) => {
 });
 
 exports.protectRoutes = createAsync(async (req, res, next) => {
-  // 1. check if header has token
-  let token = '';
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer')
-  ) {
-    token = getTokenFromHeaders(req);
-  }
+  const token = req.session.idToken;
+
   if (!token) {
-    return next(new AppError('Please provide valid token', 401));
+    console.log('No token found. Not authenticated.');
+    return next(new AppError('Not authenticated', 401));
   }
 
-  // 2. verification token
-  const decode = await promisify(jwt.verify)(token, process.env.JWT_SECRET_KEY);
+  console.log('got token:', token);
 
-  // 4. if email and password exists and compare them
-  const freshUser = await USER.findById(decode.id);
+  const decoded = await promisify(jwt.verify)(token, getKey, {
+    algorithms: ['RS256'],
+  });
 
-  if (!freshUser) {
-    return next(new AppError('User doest not exist', 400));
-  }
-
-  // Check if password changed after login
-  if (freshUser.passwordChangedAfter(decode.iat)) {
-    return next(
-      new AppError(
-        'Your password has changed recently! Please login again',
-        401,
-      ),
-    );
-  }
-
-  req.user = freshUser;
+  req.user = decoded;
   next();
 });
+
+// exports.protectRoutes = createAsync(async (req, res, next) => {
+//   // 1. check if header has token
+//   let token = '';
+//   if (
+//     req.headers.authorization &&
+//     req.headers.authorization.startsWith('Bearer')
+//   ) {
+//     token = getTokenFromHeaders(req);
+//   }
+//   if (!token) {
+//     return next(new AppError('Please provide valid token', 401));
+//   }
+
+//   // 2. verification token
+//   const decode = await promisify(jwt.verify)(token, process.env.JWT_SECRET_KEY);
+
+//   // 4. if email and password exists and compare them
+//   const freshUser = await USER.findById(decode.id);
+
+//   if (!freshUser) {
+//     return next(new AppError('User doest not exist', 400));
+//   }
+
+//   // Check if password changed after login
+//   if (freshUser.passwordChangedAfter(decode.iat)) {
+//     return next(
+//       new AppError(
+//         'Your password has changed recently! Please login again',
+//         401,
+//       ),
+//     );
+//   }
+
+//   req.user = freshUser;
+//   next();
+// });
 
 exports.restrictTo =
   (...roles) =>
